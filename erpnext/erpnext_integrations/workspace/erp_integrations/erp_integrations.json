@@ -9,8 +9,9 @@
  "hide_custom": 0,
  "icon": "integration",
  "idx": 0,
+ "indicator_color": "",
  "is_hidden": 0,
- "label": "ERPNext Integrations",
+ "label": "ERP Integrations",
  "links": [
   {
    "hidden": 0,
@@ -223,10 +224,10 @@
    "type": "Link"
   }
  ],
- "modified": "2023-08-29 15:48:59.010704",
+ "modified": "2024-12-19 14:31:39.646309",
  "modified_by": "Administrator",
  "module": "ERPNext Integrations",
- "name": "ERPNext Integrations",
+ "name": "ERP Integrations",
  "number_cards": [],
  "owner": "Administrator",
  "parent_page": "",
@@ -244,5 +245,5 @@
    "url": "https://frappecloud.com/marketplace"
   }
  ],
- "title": "ERPNext Integrations"
+ "title": "ERP Integrations"
 }
