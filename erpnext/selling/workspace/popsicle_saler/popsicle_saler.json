@@ -1,0 +1,72 @@
+{
+ "charts": [],
+ "content": "[{\"id\":\"RK-fTUynyj\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Popsicle Saler</span>\",\"col\":12}},{\"id\":\"R5zdCJ_rdS\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Open Point Of Sale\",\"col\":3}},{\"id\":\"Mpm_trpYCy\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"My Open Till\",\"col\":3}},{\"id\":\"KAD_0AwkRR\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"My Close Sales\",\"col\":3}},{\"id\":\"IADGbeHgvi\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"My Approved Sales\",\"col\":3}},{\"id\":\"xmr-E7czq3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Mobile Point Of Sale\",\"col\":3}}]",
+ "creation": "2025-01-25 18:00:47.813189",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "customization",
+ "idx": 0,
+ "indicator_color": "cyan",
+ "is_hidden": 0,
+ "label": "Popsicle Saler",
+ "links": [],
+ "modified": "2025-02-20 15:29:26.775870",
+ "modified_by": "Administrator",
+ "module": "Selling",
+ "name": "Popsicle Saler",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [
+  {
+   "role": "Popsicle Sales User"
+  }
+ ],
+ "sequence_id": 2.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Mobile Point Of Sale",
+   "link_to": "mobile-point-of-sale",
+   "type": "Page"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Open Point Of Sale",
+   "link_to": "point-of-sale",
+   "type": "Page"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "My Open Till",
+   "link_to": "POS Opening Entry",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "My Close Sales",
+   "link_to": "POS Closing Entry",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "My Approved Sales",
+   "link_to": "Sales Invoice",
+   "stats_filter": "[]",
+   "type": "DocType"
+  }
+ ],
+ "title": "Popsicle Saler"
+}
