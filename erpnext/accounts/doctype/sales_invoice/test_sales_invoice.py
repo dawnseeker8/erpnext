@@ -12,6 +12,9 @@ from frappe.utils import add_days, flt, format_date, getdate, nowdate, today
 
 import erpnext
 from erpnext.accounts.doctype.account.test_account import create_account, get_inventory_account
+from erpnext.accounts.doctype.mode_of_payment.test_mode_of_payment import (
+	set_default_account_for_mode_of_payment,
+)
 from erpnext.accounts.doctype.pos_profile.test_pos_profile import make_pos_profile
 from erpnext.accounts.doctype.purchase_invoice.purchase_invoice import WarehouseMissingError
 from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import (
@@ -54,6 +57,11 @@ class TestSalesInvoice(FrappeTestCase):
 		create_items(["_Test Internal Transfer Item"], uoms=[{"uom": "Box", "conversion_factor": 10}])
 		create_internal_parties()
 		setup_accounts()
+		mode_of_payment = frappe.get_doc("Mode of Payment", "Bank Draft")
+		set_default_account_for_mode_of_payment(mode_of_payment, "_Test Company", "_Test Bank - _TC")
+		set_default_account_for_mode_of_payment(
+			mode_of_payment, "_Test Company with perpetual inventory", "_Test Bank - TCP1"
+		)
 		frappe.db.set_single_value("Accounts Settings", "acc_frozen_upto", None)
 
 	def tearDown(self):
@@ -964,10 +972,8 @@ class TestSalesInvoice(FrappeTestCase):
 		pos.is_pos = 1
 		pos.update_stock = 1
 
-		pos.append(
-			"payments", {"mode_of_payment": "Bank Draft", "account": "_Test Bank - TCP1", "amount": 50}
-		)
-		pos.append("payments", {"mode_of_payment": "Cash", "account": "Cash - TCP1", "amount": 50})
+		pos.append("payments", {"mode_of_payment": "Bank Draft", "amount": 50})
+		pos.append("payments", {"mode_of_payment": "Cash", "amount": 50})
 
 		taxes = get_taxes_and_charges()
 		pos.taxes = []
@@ -996,10 +1002,8 @@ class TestSalesInvoice(FrappeTestCase):
 		pos.is_pos = 1
 		pos.pos_profile = pos_profile.name
 
-		pos.append(
-			"payments", {"mode_of_payment": "Bank Draft", "account": "_Test Bank - _TC", "amount": 500}
-		)
-		pos.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 500})
+		pos.append("payments", {"mode_of_payment": "Bank Draft", "amount": 500})
+		pos.append("payments", {"mode_of_payment": "Cash", "amount": 500})
 		pos.insert()
 		pos.submit()
 
@@ -1042,10 +1046,8 @@ class TestSalesInvoice(FrappeTestCase):
 		pos.is_pos = 1
 		pos.update_stock = 1
 
-		pos.append(
-			"payments", {"mode_of_payment": "Bank Draft", "account": "_Test Bank - TCP1", "amount": 50}
-		)
-		pos.append("payments", {"mode_of_payment": "Cash", "account": "Cash - TCP1", "amount": 60})
+		pos.append("payments", {"mode_of_payment": "Bank Draft", "amount": 50})
+		pos.append("payments", {"mode_of_payment": "Cash", "amount": 60})
 
 		pos.write_off_outstanding_amount_automatically = 1
 		pos.insert()
@@ -1085,10 +1087,8 @@ class TestSalesInvoice(FrappeTestCase):
 		pos.is_pos = 1
 		pos.update_stock = 1
 
-		pos.append(
-			"payments", {"mode_of_payment": "Bank Draft", "account": "_Test Bank - TCP1", "amount": 50}
-		)
-		pos.append("payments", {"mode_of_payment": "Cash", "account": "Cash - TCP1", "amount": 40})
+		pos.append("payments", {"mode_of_payment": "Bank Draft", "amount": 50})
+		pos.append("payments", {"mode_of_payment": "Cash", "amount": 40})
 
 		pos.write_off_outstanding_amount_automatically = 1
 		pos.insert()
@@ -1102,7 +1102,7 @@ class TestSalesInvoice(FrappeTestCase):
 
 		pos = create_sales_invoice(do_not_save=True)
 		pos.is_pos = 1
-		pos.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 100})
+		pos.append("payments", {"mode_of_payment": "Cash", "amount": 100})
 		pos.save().submit()
 		self.assertEqual(pos.outstanding_amount, 0.0)
 		self.assertEqual(pos.status, "Paid")
@@ -1173,10 +1173,8 @@ class TestSalesInvoice(FrappeTestCase):
 		for tax in taxes:
 			pos.append("taxes", tax)
 
-		pos.append(
-			"payments", {"mode_of_payment": "Bank Draft", "account": "_Test Bank - TCP1", "amount": 50}
-		)
-		pos.append("payments", {"mode_of_payment": "Cash", "account": "Cash - TCP1", "amount": 60})
+		pos.append("payments", {"mode_of_payment": "Bank Draft", "amount": 50})
+		pos.append("payments", {"mode_of_payment": "Cash", "amount": 60})
 
 		pos.insert()
 		pos.submit()
@@ -1818,17 +1816,6 @@ class TestSalesInvoice(FrappeTestCase):
 		for gle in gl_entries:
 			for field in expected_gle:
 				self.assertEqual(expected_gle[field], gle[field])
-
-	def test_invoice_exchange_rate(self):
-		si = create_sales_invoice(
-			customer="_Test Customer USD",
-			debit_to="_Test Receivable USD - _TC",
-			currency="USD",
-			conversion_rate=1,
-			do_not_save=1,
-		)
-
-		self.assertRaises(frappe.ValidationError, si.save)
 
 	def test_invalid_currency(self):
 		# Customer currency = USD
@@ -3915,10 +3902,8 @@ class TestSalesInvoice(FrappeTestCase):
 		pos = create_sales_invoice(qty=10, do_not_save=True)
 		pos.is_pos = 1
 		pos.pos_profile = pos_profile.name
-		pos.append(
-			"payments", {"mode_of_payment": "Bank Draft", "account": "_Test Bank - _TC", "amount": 500}
-		)
-		pos.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 500})
+		pos.append("payments", {"mode_of_payment": "Bank Draft", "amount": 500})
+		pos.append("payments", {"mode_of_payment": "Cash", "amount": 500})
 		pos.save().submit()
 
 		pos_return = make_sales_return(pos.name)
@@ -4246,6 +4231,31 @@ class TestSalesInvoice(FrappeTestCase):
 		doc = frappe.get_doc("Project", project.name)
 		self.assertEqual(doc.total_billed_amount, si.grand_total)
 
+	def test_total_billed_amount_with_different_projects(self):
+		# This test case is for checking the scenario where project is set at document level and for **some** child items only, not all
+		from copy import copy
+
+		si = create_sales_invoice(do_not_submit=True)
+
+		project = frappe.new_doc("Project")
+		project.company = "_Test Company"
+		project.project_name = "Test Total Billed Amount"
+		project.save()
+
+		si.project = project.name
+		si.items.append(copy(si.items[0]))
+		si.items.append(copy(si.items[0]))
+		si.items[0].project = project.name
+		si.items[1].project = project.name
+		# Not setting project on last item
+		si.items[1].insert()
+		si.items[2].insert()
+		si.submit()
+
+		project.reload()
+		self.assertIsNone(si.items[2].project)
+		self.assertEqual(project.total_billed_amount, 300)
+
 	def test_pos_returns_with_party_account_currency(self):
 		from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_sales_return
 
@@ -4264,11 +4274,54 @@ class TestSalesInvoice(FrappeTestCase):
 		pos.is_pos = 1
 		pos.pos_profile = pos_profile.name
 		pos.debit_to = "_Test Receivable USD - _TC"
-		pos.append("payments", {"mode_of_payment": "Cash", "account": "_Test Bank - _TC", "amount": 20.35})
+		pos.append("payments", {"mode_of_payment": "Cash", "amount": 20.35})
 		pos.save().submit()
 
 		pos_return = make_sales_return(pos.name)
 		self.assertEqual(abs(pos_return.payments[0].amount), pos.payments[0].amount)
+
+	def test_create_return_invoice_for_self_update(self):
+		from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+		from erpnext.accounts.doctype.sales_invoice.test_sales_invoice import create_sales_invoice
+		from erpnext.controllers.sales_and_purchase_return import make_return_doc
+
+		invoice = create_sales_invoice()
+
+		payment_entry = get_payment_entry(dt=invoice.doctype, dn=invoice.name)
+		payment_entry.reference_no = "test001"
+		payment_entry.reference_date = getdate()
+
+		payment_entry.save()
+		payment_entry.submit()
+
+		r_invoice = make_return_doc(invoice.doctype, invoice.name)
+
+		r_invoice.update_outstanding_for_self = 0
+		r_invoice.save()
+
+		self.assertEqual(r_invoice.update_outstanding_for_self, 1)
+
+		r_invoice.submit()
+
+		self.assertNotEqual(r_invoice.outstanding_amount, 0)
+
+		invoice.reload()
+
+		self.assertEqual(invoice.outstanding_amount, 0)
+
+	def test_prevents_fully_returned_invoice_with_zero_quantity(self):
+		from erpnext.controllers.sales_and_purchase_return import StockOverReturnError, make_return_doc
+
+		invoice = create_sales_invoice(qty=10)
+
+		return_doc = make_return_doc(invoice.doctype, invoice.name)
+		return_doc.items[0].qty = -10
+		return_doc.save().submit()
+
+		return_doc = make_return_doc(invoice.doctype, invoice.name)
+		return_doc.items[0].qty = 0
+
+		self.assertRaises(StockOverReturnError, return_doc.save)
 
 
 def set_advance_flag(company, flag, default_account):

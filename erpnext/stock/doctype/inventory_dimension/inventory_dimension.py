@@ -237,7 +237,12 @@ class InventoryDimension(Document):
 			custom_fields["Stock Ledger Entry"] = dimension_field
 
 		filter_custom_fields = {}
-		ignore_doctypes = ["Serial and Batch Bundle", "Serial and Batch Entry", "Pick List Item"]
+		ignore_doctypes = [
+			"Serial and Batch Bundle",
+			"Serial and Batch Entry",
+			"Pick List Item",
+			"Maintenance Visit Purpose",
+		]
 
 		if custom_fields:
 			for doctype, fields in custom_fields.items():
@@ -393,6 +398,7 @@ def get_inventory_dimensions():
 			"Inventory Dimension",
 			fields=[
 				"distinct target_fieldname as fieldname",
+				"source_fieldname",
 				"reference_document as doctype",
 				"validate_negative_stock",
 			],

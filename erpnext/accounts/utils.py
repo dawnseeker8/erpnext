@@ -9,8 +9,8 @@ import frappe
 import frappe.defaults
 from frappe import _, qb, throw
 from frappe.model.meta import get_field_precision
-from frappe.query_builder import AliasedQuery, Criterion, Table
-from frappe.query_builder.functions import Count, Sum
+from frappe.query_builder import AliasedQuery, Case, Criterion, Table
+from frappe.query_builder.functions import Count, Max, Sum
 from frappe.query_builder.utils import DocType
 from frappe.utils import (
 	add_days,
@@ -713,10 +713,13 @@ def update_reference_in_payment_entry(
 	update_advance_paid = []
 
 	# Update Reconciliation effect date in reference
+	reconciliation_takes_effect_on = frappe.get_cached_value(
+		"Company", payment_entry.company, "reconciliation_takes_effect_on"
+	)
 	if payment_entry.book_advance_payments_in_separate_party_account:
-		if payment_entry.advance_reconciliation_takes_effect_on == "Advance Payment Date":
+		if reconciliation_takes_effect_on == "Advance Payment Date":
 			reconcile_on = payment_entry.posting_date
-		elif payment_entry.advance_reconciliation_takes_effect_on == "Oldest Of Invoice Or Advance":
+		elif reconciliation_takes_effect_on == "Oldest Of Invoice Or Advance":
 			date_field = "posting_date"
 			if d.against_voucher_type in ["Sales Order", "Purchase Order"]:
 				date_field = "transaction_date"
@@ -724,7 +727,7 @@ def update_reference_in_payment_entry(
 
 			if getdate(reconcile_on) < getdate(payment_entry.posting_date):
 				reconcile_on = payment_entry.posting_date
-		elif payment_entry.advance_reconciliation_takes_effect_on == "Reconciliation Date":
+		elif reconciliation_takes_effect_on == "Reconciliation Date":
 			reconcile_on = nowdate()
 
 		reference_details.update({"reconcile_effect_on": reconcile_on})
@@ -1417,7 +1420,7 @@ def repost_gle_for_stock_vouchers(
 	if not warehouse_account:
 		warehouse_account = get_warehouse_account_map(company)
 
-	stock_vouchers = sort_stock_vouchers_by_posting_date(stock_vouchers)
+	stock_vouchers = sort_stock_vouchers_by_posting_date(stock_vouchers, company=company)
 	if repost_doc and repost_doc.gl_reposting_index:
 		# Restore progress
 		stock_vouchers = stock_vouchers[cint(repost_doc.gl_reposting_index) :]
@@ -1470,7 +1473,9 @@ def _delete_accounting_ledger_entries(voucher_type, voucher_no):
 	_delete_pl_entries(voucher_type, voucher_no)
 
 
-def sort_stock_vouchers_by_posting_date(stock_vouchers: list[tuple[str, str]]) -> list[tuple[str, str]]:
+def sort_stock_vouchers_by_posting_date(
+	stock_vouchers: list[tuple[str, str]], company=None
+) -> list[tuple[str, str]]:
 	sle = frappe.qb.DocType("Stock Ledger Entry")
 	voucher_nos = [v[1] for v in stock_vouchers]
 
@@ -1481,7 +1486,12 @@ def sort_stock_vouchers_by_posting_date(stock_vouchers: list[tuple[str, str]]) -
 		.groupby(sle.voucher_type, sle.voucher_no)
 		.orderby(sle.posting_datetime)
 		.orderby(sle.creation)
-	).run(as_dict=True)
+	)
+
+	if company:
+		sles = sles.where(sle.company == company)
+
+	sles = sles.run(as_dict=True)
 	sorted_vouchers = [(sle.voucher_type, sle.voucher_no) for sle in sles]
 
 	unknown_vouchers = set(stock_vouchers) - set(sorted_vouchers)
@@ -1847,14 +1857,17 @@ def update_voucher_outstanding(voucher_type, voucher_no, account, party_type, pa
 	):
 		outstanding = voucher_outstanding[0]
 		ref_doc = frappe.get_doc(voucher_type, voucher_no)
+		outstanding_amount = flt(
+			outstanding["outstanding_in_account_currency"], ref_doc.precision("outstanding_amount")
+		)
 
 		# Didn't use db_set for optimisation purpose
-		ref_doc.outstanding_amount = outstanding["outstanding_in_account_currency"] or 0.0
+		ref_doc.outstanding_amount = outstanding_amount
 		frappe.db.set_value(
 			voucher_type,
 			voucher_no,
 			"outstanding_amount",
-			outstanding["outstanding_in_account_currency"] or 0.0,
+			outstanding_amount,
 		)
 
 		ref_doc.set_status(update=True)
@@ -1967,6 +1980,15 @@ class QueryPaymentLedger:
 				.select(
 					ple.against_voucher_no.as_("voucher_no"),
 					Sum(ple.amount_in_account_currency).as_("amount_in_account_currency"),
+					Max(
+						Case().when(
+							(
+								(ple.voucher_no == ple.against_voucher_no)
+								& (ple.voucher_type == ple.against_voucher_type)
+							),
+							(ple.posting_date),
+						)
+					).as_("invoice_date"),
 				)
 				.where(ple.delinked == 0)
 				.where(Criterion.all(filter_on_against_voucher_no))
@@ -1974,7 +1996,7 @@ class QueryPaymentLedger:
 				.where(Criterion.all(self.dimensions_filter))
 				.where(Criterion.all(self.voucher_posting_date))
 				.groupby(ple.against_voucher_type, ple.against_voucher_no, ple.party_type, ple.party)
-				.orderby(ple.posting_date, ple.voucher_no)
+				.orderby(ple.invoice_date, ple.voucher_no)
 				.having(qb.Field("amount_in_account_currency") > 0)
 				.limit(self.limit)
 				.run()

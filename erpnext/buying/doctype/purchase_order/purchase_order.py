@@ -92,6 +92,8 @@ class PurchaseOrder(BuyingController):
 		customer_name: DF.Data | None
 		disable_rounded_total: DF.Check
 		discount_amount: DF.Currency
+		dispatch_address: DF.Link | None
+		dispatch_address_display: DF.TextEditor | None
 		from_date: DF.Date | None
 		grand_total: DF.Currency
 		group_same_items: DF.Check
@@ -898,7 +900,7 @@ def is_po_fully_subcontracted(po_name):
 	query = (
 		frappe.qb.from_(table)
 		.select(table.name)
-		.where((table.parent == po_name) & (table.qty != table.sco_qty))
+		.where((table.parent == po_name) & (table.qty != table.subcontracted_quantity))
 	)
 	return not query.run(as_dict=True)
 
@@ -945,7 +947,7 @@ def get_mapped_subcontracting_order(source_name, target_doc=None):
 					"material_request_item": "material_request_item",
 				},
 				"field_no_map": ["qty", "fg_item_qty", "amount"],
-				"condition": lambda item: item.qty != item.sco_qty,
+				"condition": lambda item: item.qty != item.subcontracted_quantity,
 			},
 		},
 		target_doc,
