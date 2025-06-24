@@ -26,6 +26,7 @@ class AccountsSettings(Document):
 		acc_frozen_upto: DF.Date | None
 		add_taxes_from_item_tax_template: DF.Check
 		allow_multi_currency_invoices_against_single_party_account: DF.Check
+		allow_pegged_currencies_exchange_rates: DF.Check
 		allow_stale: DF.Check
 		auto_reconcile_payments: DF.Check
 		auto_reconciliation_job_trigger: DF.Int
@@ -50,6 +51,8 @@ class AccountsSettings(Document):
 		general_ledger_remarks_length: DF.Int
 		ignore_account_closing_balance: DF.Check
 		ignore_is_opening_check_for_reporting: DF.Check
+		maintain_same_internal_transaction_rate: DF.Check
+		maintain_same_rate_action: DF.Literal["Stop", "Warn"]
 		make_payment_via_journal_entry: DF.Check
 		merge_similar_account_heads: DF.Check
 		over_billing_allowance: DF.Currency
@@ -58,6 +61,7 @@ class AccountsSettings(Document):
 		receivable_payable_remarks_length: DF.Int
 		reconciliation_queue_size: DF.Int
 		role_allowed_to_over_bill: DF.Link | None
+		role_to_override_stop_action: DF.Link | None
 		round_row_wise_tax: DF.Check
 		show_balance_in_coa: DF.Check
 		show_inclusive_tax_in_print: DF.Check
