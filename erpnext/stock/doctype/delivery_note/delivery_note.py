@@ -2,6 +2,8 @@
 # License: GNU General Public License v3. See license.txt
 
 
+import json
+
 import frappe
 from frappe import _
 from frappe.contacts.doctype.address.address import get_company_address
@@ -10,6 +12,7 @@ from frappe.model.mapper import get_mapped_doc
 from frappe.model.utils import get_fetch_values
 from frappe.utils import cint, flt
 
+from erpnext.accounts.party import get_due_date
 from erpnext.controllers.accounts_controller import get_taxes_and_charges, merge_taxes
 from erpnext.controllers.selling_controller import SellingController
 
@@ -95,7 +98,6 @@ class DeliveryNote(SellingController):
 		per_billed: DF.Percent
 		per_installed: DF.Percent
 		per_returned: DF.Percent
-		pick_list: DF.Link | None
 		plc_conversion_rate: DF.Float
 		po_date: DF.Date | None
 		po_no: DF.SmallText | None
@@ -173,6 +175,19 @@ class DeliveryNote(SellingController):
 				"percent_join_field": "against_sales_invoice",
 				"overflow_type": "delivery",
 				"no_allowance": 1,
+			},
+			{
+				"source_dt": "Delivery Note Item",
+				"target_dt": "Pick List Item",
+				"join_field": "pick_list_item",
+				"target_field": "delivered_qty",
+				"target_parent_dt": "Pick List",
+				"target_parent_field": "per_delivered",
+				"target_ref_field": "picked_qty",
+				"source_field": "stock_qty",
+				"percent_join_field": "against_pick_list",
+				"status_field": "delivery_status",
+				"keyword": "Delivered",
 			},
 		]
 		if cint(self.is_return):
@@ -326,18 +341,15 @@ class DeliveryNote(SellingController):
 	def set_serial_and_batch_bundle_from_pick_list(self):
 		from erpnext.stock.serial_batch_bundle import SerialBatchCreation
 
-		if not self.pick_list:
-			return
-
 		for item in self.items:
-			if item.use_serial_batch_fields:
+			if item.use_serial_batch_fields or not item.against_pick_list:
 				continue
 
 			if item.pick_list_item and not item.serial_and_batch_bundle:
 				filters = {
 					"item_code": item.item_code,
 					"voucher_type": "Pick List",
-					"voucher_no": self.pick_list,
+					"voucher_no": item.against_pick_list,
 					"voucher_detail_no": item.pick_list_item,
 				}
 
@@ -442,8 +454,6 @@ class DeliveryNote(SellingController):
 		self.update_prevdoc_status()
 		self.update_billing_status()
 
-		self.update_stock_reservation_entries()
-
 		if not self.is_return:
 			self.check_credit_limit()
 		elif self.issue_credit_note:
@@ -455,6 +465,9 @@ class DeliveryNote(SellingController):
 
 			self.make_bundle_for_sales_purchase_return(table_name)
 			self.make_bundle_using_old_serial_batch_fields(table_name)
+
+		self.validate_standalone_serial_nos_customer()
+		self.update_stock_reservation_entries()
 
 		# Updating stock ledger should always be called after updating prevdoc status,
 		# because updating reserved qty in bin depends upon updated delivered qty in SO
@@ -586,7 +599,9 @@ class DeliveryNote(SellingController):
 	def update_pick_list_status(self):
 		from erpnext.stock.doctype.pick_list.pick_list import update_pick_list_status
 
-		update_pick_list_status(self.pick_list)
+		pick_lists = {row.against_pick_list for row in self.items if row.against_pick_list}
+		for pick_list in pick_lists:
+			update_pick_list_status(pick_list)
 
 	def check_next_docstatus(self):
 		submit_rv = frappe.db.sql(
@@ -811,6 +826,11 @@ def get_returned_qty_map(delivery_note):
 
 @frappe.whitelist()
 def make_sales_invoice(source_name, target_doc=None, args=None):
+	if args is None:
+		args = {}
+	if isinstance(args, str):
+		args = json.loads(args)
+
 	doc = frappe.get_doc("Delivery Note", source_name)
 
 	to_make_invoice_qty_map = {}
@@ -862,6 +882,11 @@ def make_sales_invoice(source_name, target_doc=None, args=None):
 
 		return pending_qty
 
+	def select_item(d):
+		filtered_items = args.get("filtered_children", [])
+		child_filter = d.name in filtered_items if filtered_items else True
+		return child_filter
+
 	doc = get_mapped_doc(
 		"Delivery Note",
 		source_name,
@@ -884,6 +909,7 @@ def make_sales_invoice(source_name, target_doc=None, args=None):
 				"filter": lambda d: get_pending_qty(d) <= 0
 				if not doc.get("is_return")
 				else get_pending_qty(d) > 0,
+				"condition": select_item,
 			},
 			"Sales Taxes and Charges": {
 				"doctype": "Sales Taxes and Charges",
@@ -903,8 +929,25 @@ def make_sales_invoice(source_name, target_doc=None, args=None):
 	automatically_fetch_payment_terms = cint(
 		frappe.db.get_single_value("Accounts Settings", "automatically_fetch_payment_terms")
 	)
-	if automatically_fetch_payment_terms and not doc.is_return:
-		doc.set_payment_schedule()
+
+	if not doc.is_return:
+		so, doctype, fieldname = doc.get_order_details()
+		if (
+			doc.linked_order_has_payment_terms(so, fieldname, doctype)
+			and not automatically_fetch_payment_terms
+		):
+			payment_terms_template = frappe.db.get_value(doctype, so, "payment_terms_template")
+			doc.payment_terms_template = payment_terms_template
+			doc.due_date = get_due_date(
+				doc.posting_date,
+				"Customer",
+				doc.customer,
+				doc.company,
+				template_name=doc.payment_terms_template,
+			)
+
+		elif automatically_fetch_payment_terms:
+			doc.set_payment_schedule()
 
 	return doc
 
@@ -1269,6 +1312,7 @@ def make_inter_company_transaction(doctype, source_name, target_doc=None):
 				"doctype": target_doctype,
 				"postprocess": update_details,
 				"field_no_map": ["taxes_and_charges", "set_warehouse"],
+				"field_map": {"shipping_address_name": "shipping_address"},
 			},
 			doctype + " Item": {
 				"doctype": target_doctype + " Item",
