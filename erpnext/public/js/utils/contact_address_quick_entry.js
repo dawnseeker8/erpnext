@@ -36,7 +36,7 @@ frappe.ui.form.ContactAddressQuickEntryForm = class ContactAddressQuickEntryForm
 			{
 				fieldtype: "Section Break",
 				label: __("Primary Contact Details"),
-				collapsible: 1,
+				collapsible: 0,
 			},
 			{
 				label: __("Email Id"),
@@ -50,6 +50,9 @@ frappe.ui.form.ContactAddressQuickEntryForm = class ContactAddressQuickEntryForm
 			{
 				label: __("Mobile Number"),
 				fieldname: "mobile_number",
+				description: "Must include country code without + for WhatsApp function",
+				placeholder: "e.g. 254 224232323",
+				mandatory: 1,
 				fieldtype: "Data",
 			},
 			{
